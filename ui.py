@@ -69,6 +69,7 @@ def render_sidebar(model):
 
 
 def render_quick_actions(quick_cases, artifact):
+    st.divider()
     st.subheader("Quick predict")
     st.caption(
         "Load a real test customer and predict instantly. "
@@ -105,6 +106,7 @@ def render_quick_actions(quick_cases, artifact):
             "</div>",
             unsafe_allow_html=True,
         )
+    st.divider()
 
 
 def render_form():
