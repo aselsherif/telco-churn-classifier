@@ -1,30 +1,52 @@
-
 import streamlit as st
-import pandas as pd
+
+from config import ARTIFACTS_PATH, DEFAULT_VALUES, MODEL_PATH, QUICK_CASES
+from inference import load_model_files, predict_churn, to_model_customer
+from ui import (
+    init_state,
+    render_form,
+    render_quick_actions,
+    render_result,
+    render_sidebar,
+)
+
+
+@st.cache_resource
+def load_files():
+    return load_model_files(MODEL_PATH, ARTIFACTS_PATH)
+
 
 st.set_page_config(
-    page_title="My First App",
-    page_icon="📊",
+    page_title="Telco Churn Predictor",
+    page_icon="📞",
     layout="wide",
 )
 
-st.title("My First Streamlit App")
-st.write("Welcome to my data application!")
+if not MODEL_PATH.exists() or not ARTIFACTS_PATH.exists():
+    st.error(
+        "Model files are missing. Add `model/churn_classifier.joblib` and "
+        "`model/preprocessing_artifacts.joblib` before running the app."
+    )
+    st.stop()
 
-name = st.text_input("Enter your name")
+model, artifacts = load_files()
+init_state(DEFAULT_VALUES)
 
-if st.button("Submit"):
-    if name:
-        st.success(f"Welcome, {name}!")
-    else:
-        st.warning("Please enter your name.")
+st.title("Telco Customer Churn Predictor")
+st.caption("Estimate whether a customer is likely to leave the service.")
+render_sidebar(model)
+render_quick_actions(QUICK_CASES, model, artifacts)
 
-st.subheader("Sample Data")
+submitted, values = render_form()
+if submitted:
+    customer = to_model_customer(values)
+    prediction, probability = predict_churn(customer, model, artifacts)
+    st.session_state["prediction_result"] = {
+        "prediction": prediction,
+        "probability": probability,
+        "customer": customer,
+        "source": "Manual input",
+        "actual": None,
+    }
 
-df = pd.DataFrame({
-    "Customer": ["Ahmed", "Sara", "Omar"],
-    "Age": [25, 30, 28],
-    "Churn": ["No", "Yes", "No"],
-})
-
-st.dataframe(df, use_container_width=True)
+render_result()
