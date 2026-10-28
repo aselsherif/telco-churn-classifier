@@ -1,19 +1,20 @@
 import streamlit as st
 
-from config import ARTIFACTS_PATH, DEFAULT_VALUES, MODEL_PATH, QUICK_CASES
-from inference import load_model_files, predict_churn, to_model_customer
+from config import ARTIFACT_PATH, DEFAULT_VALUES, QUICK_CASES
+from inference import load_artifact, predict_churn, to_model_customer
 from ui import (
     init_state,
+    inject_css,
     render_form,
     render_quick_actions,
-    render_result,
+    render_result_dialog,
     render_sidebar,
 )
 
 
 @st.cache_resource
 def load_files():
-    return load_model_files(MODEL_PATH, ARTIFACTS_PATH)
+    return load_artifact(ARTIFACT_PATH)
 
 
 st.set_page_config(
@@ -22,25 +23,27 @@ st.set_page_config(
     layout="wide",
 )
 
-if not MODEL_PATH.exists() or not ARTIFACTS_PATH.exists():
+inject_css()
+
+if not ARTIFACT_PATH.exists():
     st.error(
-        "Model files are missing. Add `model/churn_classifier.joblib` and "
-        "`model/preprocessing_artifacts.joblib` before running the app."
+        "Deployment artifact is missing. Run the notebook export cell to create "
+        "`model/deployment_artifact.joblib`."
     )
     st.stop()
 
-model, artifacts = load_files()
+artifact = load_files()
 init_state(DEFAULT_VALUES)
 
 st.title("Telco Customer Churn Predictor")
 st.caption("Estimate whether a customer is likely to leave the service.")
-render_sidebar(model)
-render_quick_actions(QUICK_CASES, model, artifacts)
+render_sidebar(artifact["model"])
+render_quick_actions(QUICK_CASES, artifact)
 
 submitted, values = render_form()
 if submitted:
     customer = to_model_customer(values)
-    prediction, probability = predict_churn(customer, model, artifacts)
+    prediction, probability = predict_churn(customer, artifact)
     st.session_state["prediction_result"] = {
         "prediction": prediction,
         "probability": probability,
@@ -48,5 +51,7 @@ if submitted:
         "source": "Manual input",
         "actual": None,
     }
+    st.session_state["show_result_modal"] = True
 
-render_result()
+if st.session_state.pop("show_result_modal", False):
+    render_result_dialog()

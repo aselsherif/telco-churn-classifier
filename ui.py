@@ -32,6 +32,33 @@ def init_state(defaults):
     st.session_state.setdefault("prediction_result", None)
 
 
+def inject_css():
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stFormSubmitButton"] {
+            position: sticky;
+            bottom: 0.75rem;
+            z-index: 999;
+            padding: 0.75rem 0;
+            background-color: var(--background-color, #0E1117);
+        }
+        div[data-testid="stFormSubmitButton"] button {
+            background-color: #16A34A !important;
+            border-color: #16A34A !important;
+            color: #FFFFFF !important;
+            box-shadow: 0 6px 16px rgba(22, 163, 74, 0.25);
+        }
+        div[data-testid="stFormSubmitButton"] button:hover {
+            background-color: #15803D !important;
+            border-color: #15803D !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def render_sidebar(model):
     with st.sidebar:
         st.header("Model")
@@ -41,9 +68,12 @@ def render_sidebar(model):
         st.caption("Prediction threshold = 0.50")
 
 
-def render_quick_actions(quick_cases, model, artifacts):
+def render_quick_actions(quick_cases, artifact):
     st.subheader("Quick predict")
-    st.caption("Load a real test customer and predict instantly.")
+    st.caption(
+        "Load a real test customer and predict instantly. "
+        "Actual Yes = churned, No = stayed."
+    )
     quick_cols = st.columns(5)
     for index, (label, values, actual) in enumerate(quick_cases):
         if quick_cols[index].button(
@@ -53,7 +83,7 @@ def render_quick_actions(quick_cases, model, artifacts):
                 st.session_state[key] = value
 
             customer = to_model_customer(values)
-            prediction, probability = predict_churn(customer, model, artifacts)
+            prediction, probability = predict_churn(customer, artifact)
             st.session_state["prediction_result"] = {
                 "prediction": prediction,
                 "probability": probability,
@@ -61,7 +91,20 @@ def render_quick_actions(quick_cases, model, artifacts):
                 "source": label,
                 "actual": actual,
             }
+            st.session_state["show_result_modal"] = True
             st.rerun()
+
+        actual_text = "Yes" if actual == 1 else "No"
+        badge_bg = "#FEE2E2" if actual == 1 else "#DCFCE7"
+        badge_fg = "#B91C1C" if actual == 1 else "#15803D"
+        quick_cols[index].markdown(
+            "<div style='text-align:center;margin-top:-0.35rem;'>"
+            f"<span style='background:{badge_bg};color:{badge_fg};"
+            "padding:2px 8px;border-radius:999px;font-size:0.72rem;"
+            f"font-weight:600;'>Actual: {actual_text}</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
 
 
 def render_form():
@@ -143,7 +186,6 @@ def render_form():
         account_cols[1].number_input(
             "Monthly charges ($)",
             min_value=0.0,
-            max_value=200.0,
             value=None,
             step=0.05,
             key="monthly_charges",
@@ -151,13 +193,14 @@ def render_form():
         account_cols[2].number_input(
             "Total charges ($)",
             min_value=0.0,
-            max_value=10000.0,
             value=None,
             step=0.05,
             key="total_charges",
         )
 
-        submitted = st.form_submit_button(
+        actions_buttons = st.columns(4)
+
+        submitted = actions_buttons[3].form_submit_button(
             "Predict", type="primary", width="stretch"
         )
 
@@ -166,33 +209,34 @@ def render_form():
     return False, None
 
 
-def render_result():
-    result = st.session_state["prediction_result"]
+@st.dialog("Prediction result", width="medium")
+def render_result_dialog():
+    result = st.session_state.get("prediction_result")
     if not result:
+        st.info("No prediction available.")
         return
 
-    with st.container(border=True):
-        if result["prediction"] == 1:
-            st.error("This customer is at risk of leaving ⚠️")
-        else:
-            st.success("This customer is likely to stay ✅")
+    if result["prediction"] == 1:
+        st.error("This customer is at risk of leaving ⚠️")
+    else:
+        st.success("This customer is likely to stay ✅")
 
-        st.metric("Estimated churn probability", f"{result['probability']:.1%}")
-        st.progress(min(max(result["probability"], 0.0), 1.0))
+    st.metric("Estimated churn probability", f"{result['probability']:.1%}")
+    st.progress(min(max(result["probability"], 0.0), 1.0))
 
-        if result["source"] != "Manual input":
-            st.caption(f"Quick case: {result['source']}")
+    if result["source"] != "Manual input":
+        st.caption(f"Quick case: {result['source']}")
 
-        if result.get("actual") is not None:
-            actual_label = "Churned" if result["actual"] == 1 else "Stayed"
-            comparison = (
-                "matches ✅"
-                if result["prediction"] == result["actual"]
-                else "differs ❌"
-            )
-            st.caption(
-                f"Actual outcome: **{actual_label}** · Prediction {comparison}"
-            )
+    if result.get("actual") is not None:
+        actual_label = "Churned" if result["actual"] == 1 else "Stayed"
+        comparison = (
+            "matches ✅"
+            if result["prediction"] == result["actual"]
+            else "differs ❌"
+        )
+        st.caption(
+            f"Actual outcome: **{actual_label}** · Prediction {comparison}"
+        )
 
     with st.expander("Review input data"):
         st.dataframe(

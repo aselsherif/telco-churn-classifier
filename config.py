@@ -1,8 +1,7 @@
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
-MODEL_PATH = BASE_DIR / "model" / "churn_classifier.joblib"
-ARTIFACTS_PATH = BASE_DIR / "model" / "preprocessing_artifacts.joblib"
+ARTIFACT_PATH = BASE_DIR / "model" / "deployment_artifact.joblib"
 
 QUICK_CASES = [
     (
